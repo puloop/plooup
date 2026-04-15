@@ -1,43 +1,51 @@
 class_name Enemy extends CharacterBody2D
 
-var Move_Speed := 50
-var Attack_Damage := 10
-var live_Enemy := 100
-var Is_Attack:= false
-@onready var player: Player = $"../Player"
-@onready var sprite_animation: AnimatedSprite2D = $AnimatedSprite2D
-@onready var health_component: healtcomponent = $Component/HealthComponent
+# Referencias a componentes y nodos
+@onready var sprite: AnimatedSprite2D = $AnimatedSprite2D
+@onready var health_component = $Component/HealthComponent
 
+# Ajustes de movimiento
+@export var speed := 60.0
+@export var acceleration := 400.0
+
+var player: Player = null
+
+func _ready() -> void:
+	# Buscamos al jugador en la escena. 
+	# Asumimos que el Player tiene el class_name Player configurado.
+	player = get_tree().get_first_node_in_group("player")
+	
+	# Si no usas grupos, podrías buscarlo por nombre en la raíz, 
+	# pero los grupos son más eficientes.
+	if not player:
+		# Intento alternativo si no está en grupo
+		var nodes = get_tree().get_nodes_in_group("player")
+		if nodes.size() > 0:
+			player = nodes[0]
 
 func _physics_process(delta: float) -> void:
-	if ! Is_Attack and player:
-		sprite_animation.play("run")
+	if player:
+		# 1. Calcular la dirección hacia el jugador
+		var direction = (player.global_position - global_position).normalized()
 		
-		var move_direction = (player.position - position).normalized()
-		if move_direction:
-			velocity = move_direction * Move_Speed
-			if move_direction.x !=0:
-				sprite_animation.flip_h=move_direction.x <0
-				$areaAtacque.scale.x = -1 if move_direction.x < 0 else 1
-			move_and_slide()
-
-
-func _on_area_2d_body_entered(body: Node2D) -> void:
-	if  body is Player:
-		atacar()
+		# 2. Moverse hacia él con aceleración
+		velocity = velocity.move_toward(direction * speed, acceleration * delta)
 		
-func _on_area_2d_body_exited(body: Node2D) -> void:
-	if body is Player:
-		Is_Attack = false	
-		sprite_animation.play("run")
+		# 3. Orientar el sprite según la dirección
+		if direction.x != 0:
+			sprite.flip_h = direction.x < 0
+		
+		# 4. Reproducir animación si tienes una de caminar
+		if sprite.has_animation("Walk"):
+			sprite.play("Walk")
+		else:
+			sprite.play("default") # O la que tengas por defecto
+			
+		move_and_slide()
 
-func atacar():
-	sprite_animation.play("attack")
-	Is_Attack = true
-
-#cuando termine la animacion de ataque
-func _on_animated_sprite_2d_animation_finished() -> void:
-	if sprite_animation.animation == "attack":
-		if Is_Attack:
-			atacar()
-	
+# Función para que el Player le haga daño al enemigo
+func take_damage(amount: int):
+	if health_component:
+		health_component.recive_damage(amount)
+		# Podrías añadir un efecto de retroceso (knockback) aquí para que se sienta mejor
+		velocity -= (player.global_position - global_position).normalized() * 150
